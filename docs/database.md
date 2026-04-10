@@ -6,25 +6,24 @@ erDiagram
     ROUTINES ||--o{ ROUTINE_SCHEDULES : "반복 요일 (1:N)"
 
     USERS {
-        uuid id PK
-        string username
-        string email
-        timestamp created_at
-        string google_id
+        uuid id PK           // 내부 관리용 고유 키 (UUID)
+        string google_id UK  // 구글에서 넘겨주는 고유 식별자 (Unique)
+        string email         // 사용자 이메일
+        string username      // 사용자 이름
     }
     TODOS {
         uuid id PK
-        uuid user_id FK
+        uuid user_id FK      // USERS(id)를 참조
         string title
         text content
-        date target_date
         boolean is_completed
+        date target_date
         timestamp created_at
     }
     ROUTINES {
         uuid id PK
-        uuid user_id FK
-        string name
+        uuid user_id FK      // USERS(id)를 참조
+        string routine_name
         text description
         timestamp created_at
     }
@@ -35,12 +34,13 @@ erDiagram
         int list_order
     }
     ROUTINE_SCHEDULES {
-        uuid routine_id FK
-        string day_of_week
+        uuid routine_id PK, FK
+        int day_of_week PK
     }
     DIARIES {
         uuid id PK
-        uuid user_id FK
+        uuid user_id FK      // USERS(id)를 참조
         text content
-        date created_at
+        date target_date
+        timestamp created_at
     }
