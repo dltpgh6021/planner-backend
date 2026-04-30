@@ -2,17 +2,15 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
+    connectionString: process.env.DATABASE_URL, 
+    
     // 아래 ssl 설정 3줄을 추가해 주세요!
     ssl: {
         rejectUnauthorized: false
     }
 });
 
+// 예기치 않은 에러 발생 시 처리하는 부분
 pool.on('error', (err, client) => {
     console.error('Unexpected error on idle client', err);
     process.exit(-1);
