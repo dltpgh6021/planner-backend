@@ -3,7 +3,7 @@ const db = require('./config/db'); // 방금 만든 db.js 모듈 불러오기
 require('dotenv').config();
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
@@ -41,5 +41,5 @@ app.get('/test-db', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`서버가 http://localhost:${port} 에서 실행 중입니다.`);
+    console.log(`서버가 ${port}번 포트에서 실행 중입니다.`);
 });
