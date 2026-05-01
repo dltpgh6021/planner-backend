@@ -2,18 +2,51 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// 1. 전체 루틴 목록 가져오기
-router.get('/', async (req, res) => {
+// user_Id 입력하면 그에 대항하는 루틴 목록 출력
+router.get('/user/:userId', async (req, res) => {
+    const { userId } = req.params;
+
     try {
-        const result = await db.query('SELECT * FROM routines');
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, error: err.message });
+        // 기본 정보 가져오기
+        const routinesQuery = `
+            SELECT id, routine_name, description, created_at
+            FROM routines
+            WHERE user_id = $1
+            ORDER BY created_at DESC;
+        `;
+        const routinesResult = await db.query(routinesQuery, [userId]);
+        const routines = routinesResult.rows;
+
+        // 루틴 없을 때
+        if (routines.length === 0) {
+            return res.json({ success: true, message: '루틴이 없습니다. ', data: [] });
+        }
+
+        // 루틴 있는 경우 -> 요일 정보를 합쳐서 DB에서 찾아오기
+        for (let routine of routines) {
+            const scheduleQuery = `
+                SELECT day_of_week
+                FROM routine_schedules
+                WHERE routine_id = $1;
+            `;
+            const scheduleResult = await db.query(scheduleQuery, [routine.id]);
+
+            routine.schedules = scheduleResult.rows.map(row => row.day_of_week);
+        }
+
+        res.json({
+            success: true, 
+            message: '루틴 목록 조회 성공', 
+            data: routines
+        })
+    }
+    catch (err) {
+        console.log('루틴 조회 중 에러 발생: ', err);
+        res.status(500). json({ success: false, error: err.message });
     }
 });
 
-// 2. 새 루틴 추가하기
+// 새 루틴 추가하기
 router.post('/', async (req, res) => {
     // 1. 데이터 받기
     const { user_id, routine_name, description, schedules } = req.body; 
