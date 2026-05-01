@@ -39,7 +39,7 @@ router.post('/', async (req, res) => {
         let targetSchedules = schedules;
 
         if (!targetSchedules || targetSchedules.length === 0) {
-            const todayDayofWeek = new.Date().getDay();
+            const todayDayofWeek = new Date().getDay();
             targetSchedules = [todayDayofWeek];
         }
 
