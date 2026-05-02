@@ -194,4 +194,24 @@ router.put('/:routineId/items/:itemId', async(req, res) => {
 
 });
 
+// 루틴 아이템 삭제
+router.delete('/:routineId/items/itemId', async(req, res) => {
+    const { itemId } = req.params;
+    const { routineId } = req.params;
+
+    try {
+        const query = 'DELETE FROM routine_items WHERE id = $1 AND routine_id = $2 RETURNING id';
+        const result = await db.query(query, [itemId, routineId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, message: '삭제할 아이템을 찾지 못했습니다. '});
+        }
+
+        res.json({ success: true, message: '아이템이 성공적으로 삭제되었씁니다. ' });
+    } catch (err) {
+        console.error('아이템 삭제 중 에러: ', err);
+        res.status(500).json({success: false, error: err.message});
+    }
+});
+
 module.exports = router;
