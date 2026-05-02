@@ -147,7 +147,7 @@ router.post('/:routineId/items', async(req, res) => {
     try {
         const query = `
             INSERT INTO routine_items (routine_id, item_name)
-            VLAUES ($1, $2)
+            VALUES ($1, $2)
             RETURNING id, item_name;
         `;
         const result = await db.query(query, [routineId, item_name]);
