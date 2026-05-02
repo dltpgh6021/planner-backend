@@ -163,4 +163,35 @@ router.post('/:routineId/items', async(req, res) => {
     }
 });
 
+// 아이템 수정
+router.put('/:routineId/items/:itemId', async(req, res) => {
+    const { routineId } = req.params;
+    const { itemId } = req.params;
+    const { item_name } = req.body;
+
+    try {
+        const query = `
+            UPDATE routine_items
+            SET title = $1
+            WHERE id = $2 AND routine_id = $3
+            RETURNING id, title;
+        `;
+        const result = await db.query(query, [item_name, itemId, routineId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, messge: '수정할 아이템을 찾을 수 없습니다. '});
+        }
+
+        res.json({
+            success: true, 
+            message: '아이템이 성공적으로 수정되었습니다. ', 
+            data: result.rows[0]
+        });
+    } catch (err) {
+        console.error('아이템 수정 중 에러:', err);
+        res.status(500).json({success: false, error: err.message });
+    }
+
+});
+
 module.exports = router;
