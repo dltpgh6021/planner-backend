@@ -42,7 +42,7 @@ router.get('/user/:userId', async (req, res) => {
     }
     catch (err) {
         console.log('루틴 조회 중 에러 발생: ', err);
-        res.status(500). json({ success: false, error: err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -98,7 +98,38 @@ router.post('/', async (req, res) => {
     } catch (err) {
         await client.query("ROLLBACK");
         console.error('루틴 발생 중 에러:', err);
-        res.status(500),json({ success: false, error: err.message });
+        res.status(500).json({ success: false, error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+//루틴 아예 삭제 API
+router.delete('/:routineId', async (req, res) => {
+    const { routineId } = req.params;
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 스케줄, 아이템 삭제 (외래키 제약조건 에러 방지)
+        await client.query('DELETE FROM routine_schedules WHERE routine_id = $1', [routineId]);
+        await client.query('DELETE FROM routine_items WHERE routine_id = $1', [routineId]);
+
+        // 루틴 삭제
+        const result = await client.query('DELETE FROM routines WHERE id = $1 RETURNING id', [routineId]);
+
+        if (result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: '해당 루틴을 찾을 수 없습니다. ' });
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: '루틴이 성공적으로 삭제되었습니다. ' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('루틴 삭제 중 에러', err);
+        res.status(500).json({ success: true, message: '루틴이 성공적으로 삭제되었습니다. ' });
     } finally {
         client.release();
     }

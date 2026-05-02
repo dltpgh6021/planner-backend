@@ -15,12 +15,12 @@ app.use('/api/todo', todoApi);
 app.use('/api/user', userApi);
 app.use('/api/routine', routineApi);
 
-// 1. 기본 서버 연결 테스트
+// 기본 서버 연결 테스트
 app.get('/', (req, res) => {
-    res.send('플래너 앱 백엔드 서버가 정상적으로 작동 중입니다! 🚀');
+    res.send('플래너 앱 백엔드 서버가 정상적으로 작동 중입니다!');
 });
 
-// 2. DB 연결 테스트 API 생성
+// DB 연결 테스트 API 생성
 app.get('/test-db', async (req, res) => {
     try {
         // PostgreSQL에서 현재 시간을 가져오는 가장 간단한 쿼리 실행
