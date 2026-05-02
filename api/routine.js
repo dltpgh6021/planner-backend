@@ -163,6 +163,30 @@ router.post('/:routineId/items', async(req, res) => {
     }
 });
 
+// 루틴 아이템 조회
+router.get('/:routineId/items', async (req, res) => {
+    const { routineId } = req.params;
+
+    try {
+        const query = `
+            SELECT id, title
+            FROM routine_items
+            WHERE routine_id = $1
+            ORDER BY id ASC;
+        `;
+        const result = await db.query(query, [routineId]);
+
+        res.json({
+            success: true, 
+            message: '루틴 아이템 목록 조회 성공!', 
+            data: result.rows
+        });
+    } catch (err) {
+        console.error(`아이템 목록 조회 중 에러 (루틴: ${routineId}):`, err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // 아이템 수정
 router.put('/:routineId/items/:itemId', async(req, res) => {
     const { routineId } = req.params;
@@ -196,8 +220,8 @@ router.put('/:routineId/items/:itemId', async(req, res) => {
 
 // 루틴 아이템 삭제
 router.delete('/:routineId/items/:itemId', async(req, res) => {
-    const { itemId } = req.params;
     const { routineId } = req.params;
+    const { itemId } = req.params;
 
     try {
         const query = 'DELETE FROM routine_items WHERE id = $1 AND routine_id = $2 RETURNING id';
