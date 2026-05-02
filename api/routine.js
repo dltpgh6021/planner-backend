@@ -104,6 +104,57 @@ router.post('/', async (req, res) => {
     }
 });
 
+// 루틴 기본 정보 및 요일 수정 API
+router.put('/:routineId', async (req, res) => {
+    const { routineId } = req.params;
+    const { routine_name, description, schedules } = req.body;
+    
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN'); // 트랜잭션 시작
+
+        // 1. 루틴 이름과 설명 수정 (COALESCE를 써서 값이 안 들어오면 기존 값 유지)
+        const updateRoutineQuery = `
+            UPDATE routines 
+            SET routine_name = COALESCE($1, routine_name), 
+                description = COALESCE($2, description)
+            WHERE id = $3
+            RETURNING *;
+        `;
+        const routineResult = await client.query(updateRoutineQuery, [routine_name, description, routineId]);
+
+        if (routineResult.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: '수정할 루틴을 찾을 수 없습니다.' });
+        }
+
+        // 2. 만약 요일(schedules) 정보도 같이 들어왔다면?
+        if (schedules && Array.isArray(schedules)) {
+            // 기존 요일 싹 지우기
+            await client.query('DELETE FROM routine_schedules WHERE routine_id = $1', [routineId]);
+            
+            // 새 요일 꽂아 넣기
+            for (let day of schedules) {
+                await client.query(
+                    'INSERT INTO routine_schedules (routine_id, day_of_week) VALUES ($1, $2)',
+                    [routineId, day]
+                );
+            }
+        }
+
+        await client.query('COMMIT'); // 성공하면 확정
+        res.json({ success: true, message: '루틴이 성공적으로 수정되었습니다.' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`루틴 수정 중 에러 (루틴: ${routineId}):`, err);
+        res.status(500).json({ success: false, error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 //루틴 아예 삭제 API
 router.delete('/:routineId', async (req, res) => {
     const { routineId } = req.params;
