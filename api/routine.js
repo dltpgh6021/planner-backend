@@ -135,4 +135,32 @@ router.delete('/:routineId', async (req, res) => {
     }
 });
 
+
+
+// 루틴 아이템 관련 api들
+
+// 아이템 추가 api
+router.post('/:routineId/items', async(req, res) => {
+    const { routineId } = req.params;
+    const { item_name } = req.body;
+
+    try {
+        const query = `
+            INSERT INTO routine_items (routine_id, item_name)
+            VLAUES ($1, $2)
+            RETURNING id, item_name;
+        `;
+        const result = await db.query(query, [routineId, item_name]);
+
+        res.json({
+            success: true, 
+            message: '아이템이 추가되었습니다. ', 
+            data: result.rows[0]
+        });
+    } catch (err) {
+        console.error('아이템 추가 중 에러: ', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
