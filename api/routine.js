@@ -195,7 +195,7 @@ router.put('/:routineId/items/:itemId', async(req, res) => {
 });
 
 // 루틴 아이템 삭제
-router.delete('/:routineId/items/itemId', async(req, res) => {
+router.delete('/:routineId/items/:itemId', async(req, res) => {
     const { itemId } = req.params;
     const { routineId } = req.params;
 
