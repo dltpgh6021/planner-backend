@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-
-=======
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
@@ -106,4 +103,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
->>>>>>> feat/diary-api
