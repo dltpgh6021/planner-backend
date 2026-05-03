@@ -11,9 +11,9 @@ const todoApi = require('./api/todo');
 const userApi = require('./api/user');
 const routineApi = require('./api/routine');
 
-app.use('/api/todos', todoApi);
-app.use('/api/users', userApi);
-app.use('/api/routines', routineApi);
+app.use('/api/todo', todoApi);
+app.use('/api/user', userApi);
+app.use('/api/routine', routineApi);
 
 // 1. 기본 서버 연결 테스트
 app.get('/', (req, res) => {
