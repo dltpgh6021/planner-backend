@@ -10,10 +10,12 @@ app.use(express.json());
 const todoApi = require('./api/todo');
 const userApi = require('./api/user');
 const routineApi = require('./api/routine');
+const diaryApi = require('./api/diary');
 
 app.use('/api/todo', todoApi);
 app.use('/api/user', userApi);
 app.use('/api/routine', routineApi);
+app.use('/api/diary', diaryApi);
 
 // 기본 서버 연결 테스트
 app.get('/', (req, res) => {
