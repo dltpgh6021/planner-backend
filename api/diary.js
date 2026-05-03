@@ -22,7 +22,7 @@ router.post('/', async (req, res) => {
 
 // 일기 조회
 // 특정 날짜의 일기 조회
-router.get('/search', async (req, res) => {
+router.get('/', async (req, res) => {
     const { user_id, target_date } = req.query;
     if (!user_id || !target_date) {
         return res.status(400).json({ success: false, message: "user_id와 target_date가 필요합니다." });
@@ -91,9 +91,9 @@ router.patch('/:id', async (req, res) => {
 // 일기 삭제
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
-    const { user_id } = req.query; // 👈 Body 안 씀!
+    const { user_id } = req.query; 
     try {
-        const query = 'DELETE FROM TODOS WHERE id = $1 AND user_id = $2 RETURNING *;';
+        const query = 'DELETE FROM DIARIES WHERE id = $1 AND user_id = $2 RETURNING *;';
         const result = await db.query(query, [id, user_id]);
         if (result.rowCount === 0) return res.status(404).json({ success: false, message: "항목을 찾을 수 없거나 권한이 없습니다." });
         res.json({ success: true, message: "성공적으로 삭제되었습니다." });
