@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
@@ -5,7 +6,8 @@ const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 
 // 💡 여기에 나중에 구글 클라우드 콘솔에서 발급받은 '클라이언트 ID'를 넣을 거야! (지금은 임시)
-const GOOGLE_CLIENT_ID = '여기에_구글_클라이언트_ID를_넣으세요';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const JWT_SECRET = process.env.JWT_SECRET;
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // 💡 우리가 발급할 JWT 출입증의 비밀번호 (이것도 나중에 .env 파일로 숨기는 게 좋아!)
