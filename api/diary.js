@@ -4,7 +4,8 @@ const db = require('../config/db');
 
 // 일기 작성
 router.post('/', async (req, res) => {
-    const { user_id, content, target_date } = req.body;
+    const { content, target_date } = req.body;
+    const user_id = req.user.id;
     try {
         const query = `
             INSERT INTO DIARIES (user_id, content, target_date)
@@ -23,7 +24,8 @@ router.post('/', async (req, res) => {
 // 일기 조회
 // 특정 날짜의 일기 조회
 router.get('/', async (req, res) => {
-    const { user_id, target_date } = req.query;
+    const { target_date } = req.query;
+    const user_id = req.user.id;
     if (!user_id || !target_date) {
         return res.status(400).json({ success: false, message: "user_id와 target_date가 필요합니다." });
     }
@@ -39,7 +41,8 @@ router.get('/', async (req, res) => {
 // 일기 내용으로 조회
 router.get('/search', async (req, res) => {
     // 검색어(keyword)도 query에서 받아옵니다.
-    const { user_id, keyword } = req.query;
+    const { keyword } = req.query;
+    const user_id = req.user.id;
 
     if (!user_id || !keyword) {
         return res.status(400).json({ success: false, message: "user_id와 keyword가 필요합니다." });
@@ -69,7 +72,8 @@ router.get('/search', async (req, res) => {
 // 일기 수정
 router.patch('/:id', async (req, res) => {
     const { id } = req.params;
-    const { user_id, content } = req.body;
+    const { content } = req.body;
+    const user_id = req.user.id;
     try {
         const query = `
             UPDATE DIARIES 
@@ -91,7 +95,7 @@ router.patch('/:id', async (req, res) => {
 // 일기 삭제
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
-    const { user_id } = req.query; 
+    const user_id = req.user.id;
     try {
         const query = 'DELETE FROM DIARIES WHERE id = $1 AND user_id = $2 RETURNING *;';
         const result = await db.query(query, [id, user_id]);
