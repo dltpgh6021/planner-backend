@@ -13,7 +13,7 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 router.get('/dev-token', (req, res) => {
     // test 유저의 정보로 JWT 토큰 강제 생성
     const testToken = jwt.sign(
-        { id: "5ffd29b8-a3cc-4de2-85c8-aabd2178e06d", googld_id: "dummy_google_123" }, 
+        { id: "5ffd29b8-a3cc-4de2-85c8-aabd2178e06d", googld_id: "dev_test_123" }, 
         process.env.JWT_SECRET, 
         { expiresIn: '7d' }
     );
