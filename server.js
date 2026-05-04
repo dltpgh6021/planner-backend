@@ -12,11 +12,12 @@ const userApi = require('./api/user');
 const routineApi = require('./api/routine');
 const diaryApi = require('./api/diary');
 const authApi = require('./api/auth');
+const requireAuth = require('./middleware/requireAuth');
 
-app.use('/api/todo', todoApi);
-app.use('/api/user', userApi);
-app.use('/api/routine', routineApi);
-app.use('/api/diary', diaryApi);
+app.use('/api/todo', requireAuth, todoApi);
+app.use('/api/user', requireAuth, userApi);
+app.use('/api/routine', requireAuth, routineApi);
+app.use('/api/diary', requireAuth, diaryApi);
 app.use('/api/auth', authApi);
 
 // 기본 서버 연결 테스트
