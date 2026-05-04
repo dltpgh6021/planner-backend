@@ -5,13 +5,11 @@ const db = require('../config/db');
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 
-// 💡 여기에 나중에 구글 클라우드 콘솔에서 발급받은 '클라이언트 ID'를 넣을 거야! (지금은 임시)
+// 여기에 나중에 구글 클라우드 콘솔에서 발급받은 '클라이언트 ID'를 넣을 거야! (지금은 임시)
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const JWT_SECRET = process.env.JWT_SECRET;
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-// 💡 우리가 발급할 JWT 출입증의 비밀번호 (이것도 나중에 .env 파일로 숨기는 게 좋아!)
-const JWT_SECRET = 'my-super-secret-jwt-key-for-planner';
 
 // 구글 로그인 & 회원가입 API (POST /api/auth/google)
 router.post('/google', async (req, res) => {
