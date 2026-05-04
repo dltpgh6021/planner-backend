@@ -5,7 +5,8 @@ const db = require('../config/db');
 // 새 루틴 추가하기
 router.post('/', async (req, res) => {
     // 1. 데이터 받기
-    const { user_id, routine_name, description, schedules } = req.body; 
+    const { routine_name, description, schedules } = req.body; 
+    const user_id = req.user.id;
 
     // 트랜잭션을 위한 클라이언트 연결
     const client = await db.connect();
@@ -37,13 +38,14 @@ router.post('/', async (req, res) => {
             INSERT INTO routine_schedules (routine_id, day_of_week)
             VALUES ($1, $2)
         `;
-
-        for (const day of targetSchedules) {
-            await client.query(insertScheduleQuery, [newRoutineId, day]);
-        }
+    
+        const insertPromises = targetSchedules.map(day => {
+            return client.query(insertScheduleQuery, [newRoutineId, day]);
+        });
+        await Promise.all(insertPromises);
 
         await client.query('COMMIT');
-        res.json({
+        res.status(201).json({
             success: true, 
             message: '루틴이 성공적으로 생성되었습니다. ', 
             routine_id: newRoutineId, 
@@ -60,36 +62,36 @@ router.post('/', async (req, res) => {
     }
 });
 
-// user_Id 입력하면 그에 대항하는 루틴 목록 출력
-router.get('/user/:userId', async (req, res) => {
-    const { userId } = req.params;
+// user_id 입력하면 그에 대항하는 루틴 목록 출력
+router.get('/', async (req, res) => {
+    const user_id = req.user.id;
 
     try {
         // 기본 정보 가져오기
-        const routinesQuery = `
-            SELECT id, routine_name, description, created_at
-            FROM routines
-            WHERE user_id = $1
-            ORDER BY created_at DESC;
+        // COALESCE와 NULLIF를 써서 요일이 아예 없는 빈 루틴도 배열이 빈 상태로 에러 없이 가져옴
+        const query = `
+            SELECT 
+                r.id, 
+                r.routine_name, 
+                r.description, 
+                r.created_at,
+                COALESCE(
+                    ARRAY_AGG(rs.day_of_week) FILTER (WHERE rs.day_of_week IS NOT NULL), 
+                    '{}'
+                ) AS schedules
+            FROM routines r
+            LEFT JOIN routine_schedules rs ON r.id = rs.routine_id
+            WHERE r.user_id = $1
+            GROUP BY r.id
+            ORDER BY r.created_at DESC;
         `;
-        const routinesResult = await db.query(routinesQuery, [userId]);
-        const routines = routinesResult.rows;
+        
+        const result = await db.query(query, [user_id]);
+        const routines = result.rows;
 
         // 루틴 없을 때
         if (routines.length === 0) {
             return res.json({ success: true, message: '루틴이 없습니다. ', data: [] });
-        }
-
-        // 루틴 있는 경우 -> 요일 정보를 합쳐서 DB에서 찾아오기
-        for (let routine of routines) {
-            const scheduleQuery = `
-                SELECT day_of_week
-                FROM routine_schedules
-                WHERE routine_id = $1;
-            `;
-            const scheduleResult = await db.query(scheduleQuery, [routine.id]);
-
-            routine.schedules = scheduleResult.rows.map(row => row.day_of_week);
         }
 
         res.json({
@@ -108,7 +110,13 @@ router.get('/user/:userId', async (req, res) => {
 router.put('/:routineId', async (req, res) => {
     const { routineId } = req.params;
     const { routine_name, description, schedules } = req.body;
+    const user_id = req.user.id;
     
+    // 둘 다 안보냈으면 DB 작업 할 필요 없음. 
+    if (!routine_name && !description && !schedules) {
+        return res.status(400).json({ success: false, message: "수정할 데이터를 보내주세요." });
+    }
+
     const client = await db.connect();
 
     try {
@@ -119,14 +127,14 @@ router.put('/:routineId', async (req, res) => {
             UPDATE routines 
             SET routine_name = COALESCE($1, routine_name), 
                 description = COALESCE($2, description)
-            WHERE id = $3
+            WHERE id = $3 AND user_id = $4
             RETURNING *;
         `;
-        const routineResult = await client.query(updateRoutineQuery, [routine_name, description, routineId]);
+        const routineResult = await client.query(updateRoutineQuery, [routine_name, description, routineId, user_id]);
 
         if (routineResult.rowCount === 0) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ success: false, message: '수정할 루틴을 찾을 수 없습니다.' });
+            return res.status(404).json({ success: false, message: '권한이 없거나 수정할 루틴을 찾을 수 없습니다.' });
         }
 
         // 2. 만약 요일(schedules) 정보도 같이 들어왔다면?
@@ -135,16 +143,20 @@ router.put('/:routineId', async (req, res) => {
             await client.query('DELETE FROM routine_schedules WHERE routine_id = $1', [routineId]);
             
             // 새 요일 꽂아 넣기
-            for (let day of schedules) {
-                await client.query(
-                    'INSERT INTO routine_schedules (routine_id, day_of_week) VALUES ($1, $2)',
-                    [routineId, day]
-                );
+            if (schedules.length > 0) {
+                // 실무 최적화: for문 대신 Promise.all을 써서 병렬(동시)로 쿼리를 날리면 훨씬 빠름!
+                const insertPromises = schedules.map(day => {
+                    return client.query(
+                        'INSERT INTO routine_schedules (routine_id, day_of_week) VALUES ($1, $2)',
+                        [routineId, day]
+                    );
+                });
+                await Promise.all(insertPromises);
             }
         }
 
         await client.query('COMMIT'); // 성공하면 확정
-        res.json({ success: true, message: '루틴이 성공적으로 수정되었습니다.' });
+        res.json({ success: true, message: '루틴이 성공적으로 수정되었습니다.', data: routineResult.rows[0] });
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -158,29 +170,34 @@ router.put('/:routineId', async (req, res) => {
 //루틴 아예 삭제 API
 router.delete('/:routineId', async (req, res) => {
     const { routineId } = req.params;
+    const user_id = req.user.id;
+
     const client = await db.connect();
 
     try {
         await client.query('BEGIN');
 
+        const checkOwnershipQuery = 'SELECT id FROM routines WHERE id = $1 AND user_id = $2';
+        const ownershipCheck = await client.query(checkOwnershipQuery, [routineId, user_id]);
+
+        if (ownershipCheck.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ success: false, message: '권한이 없거나 해당 루틴을 찾을 수 없습니다. ' });
+        }
+
         // 스케줄, 아이템 삭제 (외래키 제약조건 에러 방지)
         await client.query('DELETE FROM routine_schedules WHERE routine_id = $1', [routineId]);
         await client.query('DELETE FROM routine_items WHERE routine_id = $1', [routineId]);
 
-        // 루틴 삭제
-        const result = await client.query('DELETE FROM routines WHERE id = $1 RETURNING id', [routineId]);
-
-        if (result.rowCount === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ success: false, message: '해당 루틴을 찾을 수 없습니다. ' });
-        }
+        // 부모 루틴 삭제
+        const result = await client.query('DELETE FROM routines WHERE id = $1 AND user_id = $2 RETURNING id', [routineId, user_id]);
 
         await client.query('COMMIT');
         res.json({ success: true, message: '루틴이 성공적으로 삭제되었습니다. ' });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('루틴 삭제 중 에러', err);
-        res.status(500).json({ success: true, message: '루틴이 성공적으로 삭제되었습니다. ' });
+        res.status(500).json({ success: true, message: err.message });
     } finally {
         client.release();
     }
