@@ -10,6 +10,15 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const JWT_SECRET = process.env.JWT_SECRET;
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
+router.get('/dev-token', (req, res) => {
+    // test 유저의 정보로 JWT 토큰 강제 생성
+    const testToken = jwt.sign(
+        { id: "abf32693-ea4f-4422-9323-7bf423e31f45", googld_id: "dummy_google_123" }, 
+        process.env.JWT_SECRET, 
+        { expiresIn: '7d' }
+    );
+    res.json({ success: true, message: "테스트용 토큰 발급 완료!", token: testToken });
+});
 
 // 구글 로그인 & 회원가입 API (POST /api/auth/google)
 router.post('/google', async (req, res) => {
