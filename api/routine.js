@@ -211,8 +211,24 @@ router.delete('/:routineId', async (req, res) => {
 router.post('/:routineId/items', async(req, res) => {
     const { routineId } = req.params;
     const { item_name } = req.body;
+    const user_id = req.user.id;
+
+    // 방어 로직. 아이템 이름이 비어있으면 바로 아웃
+    if (!item_name || item_name.trim() === "") {
+        return res.status(400).json({ success: false, message: "아이템 이름을 입력해주세요. " });
+    }
 
     try {
+        // 이 루틴이 user의 것이 맞는지 확인
+        const checkOwnershipQuery = 'SELECT id FROM routines WHERE id = $1 AND user_id = $2';
+        const ownershipCheck = await db.query(checkOwnershipQuery, [routineId, user_id]);
+
+        if (ownershipCheck.rowCount === 0) {
+            // 내 루틴이 아니거나 존재하지 않는 루틴이면 거절
+            return res.status(403).json({ success: false, message: "권한이 없거나 해당 루틴을 찾을 수 없습니다." });
+        }
+
+        // user의 루틴임을 확인 이후 아이템 추가
         const query = `
             INSERT INTO routine_items (routine_id, title)
             VALUES ($1, $2)
@@ -220,7 +236,7 @@ router.post('/:routineId/items', async(req, res) => {
         `;
         const result = await db.query(query, [routineId, item_name]);
 
-        res.json({
+        res.status(201).json({
             success: true, 
             message: '아이템이 추가되었습니다. ', 
             data: result.rows[0]
@@ -234,8 +250,18 @@ router.post('/:routineId/items', async(req, res) => {
 // 루틴 아이템 조회
 router.get('/:routineId/items', async (req, res) => {
     const { routineId } = req.params;
+    const user_id = req.user.id;
 
     try {
+        // 루틴이 내 것인지 검증
+        const checkOwnershipQuery = 'SELECT id FROM routines WHERE id = $1 AND user_id = $2';
+        const ownershipCheck = await db.query(checkOwnershipQuery, [routineId, user_id]);
+
+        if (ownershipCheck.rowCount === 0) {
+            // 내 루틴이 아니거나 아예 없는 루틴이면 여기서 접근 차단!
+            return res.status(403).json({ success: false, message: "권한이 없거나 해당 루틴을 찾을 수 없습니다." });
+        }
+
         const query = `
             SELECT id, title
             FROM routine_items
@@ -257,11 +283,24 @@ router.get('/:routineId/items', async (req, res) => {
 
 // 아이템 수정
 router.put('/:routineId/items/:itemId', async(req, res) => {
-    const { routineId } = req.params;
-    const { itemId } = req.params;
+    const { routineId, itemId } = req.params;
     const { item_name } = req.body;
+    const user_id = req.user.id;
+
+    // 방어 로직: 사용자가 실수로 빈칸을 보냈을 때 컷
+    if (!item_name || item_name.trim() === "") {
+        return res.status(400).json({ success: false, message: "수정할 아이템 이름을 입력해주세요." });
+    }
 
     try {
+        // 소유권 검증: 이 루틴이 진짜 내 것(user_id)인지 먼저 확인!
+        const checkOwnershipQuery = 'SELECT id FROM routines WHERE id = $1 AND user_id = $2';
+        const ownershipCheck = await db.query(checkOwnershipQuery, [routineId, user_id]);
+
+        if (ownershipCheck.rowCount === 0) {
+            return res.status(403).json({ success: false, message: "권한이 없거나 해당 루틴을 찾을 수 없습니다." });
+        }
+
         const query = `
             UPDATE routine_items
             SET title = $1
@@ -271,7 +310,7 @@ router.put('/:routineId/items/:itemId', async(req, res) => {
         const result = await db.query(query, [item_name, itemId, routineId]);
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, messge: '수정할 아이템을 찾을 수 없습니다. '});
+            return res.status(404).json({ success: false, message: '수정할 아이템을 찾을 수 없습니다. '});
         }
 
         res.json({
@@ -288,10 +327,18 @@ router.put('/:routineId/items/:itemId', async(req, res) => {
 
 // 루틴 아이템 삭제
 router.delete('/:routineId/items/:itemId', async(req, res) => {
-    const { routineId } = req.params;
-    const { itemId } = req.params;
+    const { routineId, itemId } = req.params;
+    const user_id = req.user.id;
 
     try {
+        // 소유권 검증: 이 루틴이 진짜 내 것(user_id)인지 먼저 확인
+        const checkOwnershipQuery = 'SELECT id FROM routines WHERE id = $1 AND user_id = $2';
+        const ownershipCheck = await db.query(checkOwnershipQuery, [routineId, user_id]);
+
+        if (ownershipCheck.rowCount === 0) {
+            return res.status(403).json({ success: false, message: "권한이 없거나 해당 루틴을 찾을 수 없습니다." });
+        }
+
         const query = 'DELETE FROM routine_items WHERE id = $1 AND routine_id = $2 RETURNING id';
         const result = await db.query(query, [itemId, routineId]);
 
@@ -299,7 +346,7 @@ router.delete('/:routineId/items/:itemId', async(req, res) => {
             return res.status(404).json({ success: false, message: '삭제할 아이템을 찾지 못했습니다. '});
         }
 
-        res.json({ success: true, message: '아이템이 성공적으로 삭제되었씁니다. ' });
+        res.json({ success: true, message: '아이템이 성공적으로 삭제되었습니다. ' });
     } catch (err) {
         console.error('아이템 삭제 중 에러: ', err);
         res.status(500).json({success: false, error: err.message});
