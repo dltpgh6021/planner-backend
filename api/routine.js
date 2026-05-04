@@ -107,7 +107,7 @@ router.get('/', async (req, res) => {
 });
 
 // 루틴 기본 정보 및 요일 수정 API
-router.put('/:routineId', async (req, res) => {
+router.patch('/:routineId', async (req, res) => {
     const { routineId } = req.params;
     const { routine_name, description, schedules } = req.body;
     const user_id = req.user.id;
@@ -282,7 +282,7 @@ router.get('/:routineId/items', async (req, res) => {
 });
 
 // 아이템 수정
-router.put('/:routineId/items/:itemId', async(req, res) => {
+router.patch('/:routineId/items/:itemId', async(req, res) => {
     const { routineId, itemId } = req.params;
     const { item_name } = req.body;
     const user_id = req.user.id;
