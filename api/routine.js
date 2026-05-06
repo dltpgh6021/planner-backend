@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // 새 루틴 추가하기
 router.post('/', async (req, res) => {
@@ -350,6 +353,98 @@ router.delete('/:routineId/items/:itemId', async(req, res) => {
     } catch (err) {
         console.error('아이템 삭제 중 에러: ', err);
         res.status(500).json({success: false, error: err.message});
+    }
+});
+
+router.post('/from-image', async (req, res) => {
+    const { imageBase64, mimeType } = req.body;
+    const user_id = req.user.id;
+
+    if (!imageBase64 || !mimeType) {
+        return res.status(400).json({ success: false, message: "이미지 데이터가 필요합니다." });
+    }
+
+    try {
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash",
+            generationConfig: { responseMimeType: "application/json" } 
+        });
+
+        // 💡 루틴에 맞게 수정된 프롬프트
+        const prompt = `
+            너는 ADHD 성향을 가진 사용자의 행동력을 높여주는 전문적인 '실행력 보조(Executive Function) AI 코치'야.
+            사용자는 현재 압도감(Overwhelm) 때문에 시작하지 못하는 상황을 사진으로 보냈어.
+            
+            [지침]
+            1. 이 상황을 타파하기 위한 하나의 '루틴(Routine) 제목'을 부담 없는 톤으로 지어줘.
+            2. 이 거대한 덩어리를 생각할 필요 없이 당장 손만 뻗으면 할 수 있는 아주 작고(Micro) 기계적인 행동 3가지로 쪼개서 루틴 아이템으로 만들어줘.
+            3. "정리하기", "분류하기" 같은 추상적인 단어는 절대 금지. 매우 구체적이고 간단히 시작할 수 있는 형태의 행동으로 표현해줘. 
+            4. 반드시 아래의 JSON 객체 형식으로만 응답할 것.
+
+            [응답 포맷]
+            {
+              "routine_title": "루틴의 재미있고 부담 없는 제목",
+              "items": [
+                { "content": "가장 작고 쉬운 첫 번째 행동" },
+                { "content": "이어서 할 두 번째 행동" }
+              ]
+            }
+        `;
+
+        const imagePart = {
+            inlineData: { data: imageBase64, mimeType: mimeType }
+        };
+
+        const result = await model.generateContent([prompt, imagePart]);
+        const generatedData = JSON.parse(result.response.text());
+
+        // 트랜잭션 시작: ROUTINES 생성 -> routine_items 생성
+        const client = await db.connect();
+        let createdRoutine;
+
+        try {
+            await client.query('BEGIN');
+
+            // 1. 부모 테이블(ROUTINES)에 루틴 제목 먼저 INSERT
+            const routineQuery = `
+                INSERT INTO ROUTINES (user_id, routine_name)
+                VALUES ($1, $2)
+                RETURNING *;
+            `;
+            const routineResult = await client.query(routineQuery, [user_id, generatedData.routine_title]);
+            createdRoutine = routineResult.rows[0];
+            const newRoutineId = createdRoutine.id;
+
+            // 2. 자식 테이블(routine_items)에 AI가 만든 쪼개진 행동들 INSERT
+            let itemResults = [];
+                for (const item of generatedData.items) {
+                    const itemQuery = `
+                        INSERT INTO routine_items (routine_id, content)
+                        VALUES ($1, $2)
+                        RETURNING *;
+                    `;
+                    const result = await client.query(itemQuery, [newRoutineId, item.content]);
+                    itemResults.push(result.rows[0]);
+                }
+            createdRoutine.items = itemResults;
+
+            await client.query('COMMIT');
+        } catch (dbErr) {
+            await client.query('ROLLBACK');
+            throw dbErr;
+        } finally {
+            client.release();
+        }
+
+        res.json({
+            success: true,
+            message: "상황 맞춤형 루틴이 성공적으로 생성되었습니다.",
+            data: createdRoutine
+        });
+
+    } catch (err) {
+        console.error('AI 루틴 생성 에러:', err);
+        res.status(500).json({ success: false, message: "AI 분석에 실패했습니다.", error: err.message });
     }
 });
 
