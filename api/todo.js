@@ -79,4 +79,24 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// TODO List 불러오기
+router.get('/all', async (req, res) => {
+    const user_id = req.user.id;
+    try {
+        const query = `
+            SELECT target_date,
+                   ARRAY_AGG(title ORDER BY id ASC) as titles,
+                   ARRAY_AGG(id::text ORDER BY id ASC) as ids
+            FROM TODOS
+            WHERE user_id = $1
+            GROUP BY target_date
+            ORDER BY target_date DESC;
+        `;
+        const result = await db.query(query, [user_id]);
+        res.json({ success: true, data: result.rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
