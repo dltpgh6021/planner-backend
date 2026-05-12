@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { getRoutinePrompt } = require('../prompts/routinePrompt');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -371,25 +372,7 @@ router.post('/from-image', async (req, res) => {
         });
 
         // 💡 루틴에 맞게 수정된 프롬프트
-        const prompt = `
-            너는 ADHD 성향을 가진 사용자의 행동력을 높여주는 전문적인 '실행력 보조(Executive Function) AI 코치'야.
-            사용자는 현재 압도감(Overwhelm) 때문에 시작하지 못하는 상황을 사진으로 보냈어.
-            
-            [지침]
-            1. 이 상황을 타파하기 위한 하나의 '루틴(Routine) 제목'을 부담 없는 톤으로 지어줘.
-            2. 이 거대한 덩어리를 생각할 필요 없이 당장 손만 뻗으면 할 수 있는 아주 작고(Micro) 기계적인 행동 3가지로 쪼개서 루틴 아이템으로 만들어줘.
-            3. "정리하기", "분류하기" 같은 추상적인 단어는 절대 금지. 매우 구체적이고 간단히 시작할 수 있는 형태의 행동으로 표현해줘. 
-            4. 반드시 아래의 JSON 객체 형식으로만 응답할 것.
-
-            [응답 포맷]
-            {
-              "routine_title": "루틴의 재미있고 부담 없는 제목",
-              "items": [
-                { "content": "가장 작고 쉬운 첫 번째 행동" },
-                { "content": "이어서 할 두 번째 행동" }
-              ]
-            }
-        `;
+        const prompt = getRoutinePrompt();
 
         const imagePart = {
             inlineData: { data: imageBase64, mimeType: mimeType }
