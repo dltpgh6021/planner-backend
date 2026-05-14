@@ -214,7 +214,7 @@ router.delete('/:routineId', async (req, res) => {
 // 아이템 추가 api
 router.post('/:routineId/items', async(req, res) => {
     const { routineId } = req.params;
-    const { item_name } = req.body;
+    const { item_name, start_time } = req.body;
     const user_id = req.user.id;
 
     // 방어 로직. 아이템 이름이 비어있으면 바로 아웃
@@ -400,17 +400,23 @@ router.post('/from-image', async (req, res) => {
 
             // 2. 자식 테이블(routine_items)에 AI가 만든 쪼개진 행동들 INSERT
             let itemResults = [];
+            let order = 1;
+
+            const now = new Date();
+            const defaultTime = now.toTimeString().split(' ')[0].substring(0, 5);
                 for (const item of generatedData.items) {
                     const itemQuery = `
                         INSERT INTO routine_items (routine_id, title, list_order, start_time)
                         VALUES ($1, $2, $3, $4)
                         RETURNING *;
                     `;
+                    const targetTime = item.start_time || defaultTime;
+
                     const result = await client.query(itemQuery, [
                         newRoutineId, 
                         item.content, 
                         order++, 
-                        item.start_time
+                        targetTime
                     ]);
 
                     const saveItem = result.rows[0];
