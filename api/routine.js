@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/db');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { getRoutinePrompt } = require('../prompts/routinePrompt');
+const { startTransition } = require('react');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -285,10 +286,15 @@ router.get('/:routineId/items', async (req, res) => {
         `;
         const result = await db.query(query, [routineId]);
 
+        const formattedItems = result.rows.map(item => ({
+            ...item, 
+            start_time: item.start_time ? item.start_time.substring(0, 5) : null
+        }));
+
         res.json({
             success: true, 
             message: '루틴 아이템 목록 조회 성공!', 
-            data: result.rows
+            data: formattedItems
         });
     } catch (err) {
         console.error(`아이템 목록 조회 중 에러 (루틴: ${routineId}):`, err);
