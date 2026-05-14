@@ -84,15 +84,58 @@ router.get('/all', async (req, res) => {
     const user_id = req.user.id;
     try {
         const query = `
-            SELECT target_date,
-                   ARRAY_AGG(title ORDER BY id ASC) as titles,
-                   ARRAY_AGG(id::text ORDER BY id ASC) as ids
+            SELECT 
+                TO_CHAR(target_date AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') as target_date,
+                ARRAY_AGG(title ORDER BY id ASC) as titles,
+                ARRAY_AGG(id::text ORDER BY id ASC) as ids
             FROM TODOS
             WHERE user_id = $1
-            GROUP BY target_date
-            ORDER BY target_date DESC;
+            GROUP BY TO_CHAR(target_date AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+            ORDER BY TO_CHAR(target_date AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') DESC;
         `;
         const result = await db.query(query, [user_id]);
+        res.json({ success: true, data: result.rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 월별 완료 개수 조회
+router.get('/monthly', async (req, res) => {
+    const { year, month } = req.query;
+    const user_id = req.user.id;
+    try {
+        const query = `
+            SELECT 
+                date_day,
+                SUM(completed_count) as completed
+            FROM (
+                -- 투두 완료 수
+                SELECT 
+                    TO_CHAR(target_date AT TIME ZONE 'Asia/Seoul', 'DD') as date_day,
+                    SUM(CASE WHEN is_completed = true THEN 1 ELSE 0 END) as completed_count
+                FROM TODOS
+                WHERE user_id = $1
+                    AND EXTRACT(YEAR FROM target_date AT TIME ZONE 'Asia/Seoul') = $2
+                    AND EXTRACT(MONTH FROM target_date AT TIME ZONE 'Asia/Seoul') = $3
+                GROUP BY TO_CHAR(target_date AT TIME ZONE 'Asia/Seoul', 'DD')
+
+                UNION ALL
+
+                -- 루틴 완료 수
+                SELECT 
+                    TO_CHAR(completed_date, 'DD') as date_day,
+                    COUNT(*) as completed_count
+                FROM routine_completions
+                WHERE user_id = $1
+                    AND EXTRACT(YEAR FROM completed_date) = $2
+                    AND EXTRACT(MONTH FROM completed_date) = $3
+                GROUP BY TO_CHAR(completed_date, 'DD')
+            ) combined
+            GROUP BY date_day
+            ORDER BY date_day ASC;
+        `;
+        const result = await db.query(query, [user_id, year, month]);
         res.json({ success: true, data: result.rows });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });

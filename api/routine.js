@@ -353,4 +353,59 @@ router.delete('/:routineId/items/:itemId', async(req, res) => {
     }
 });
 
+// 루틴 아이템 완료 체크/해제
+router.post('/:routineId/items/:itemId/complete', async (req, res) => {
+    const { itemId } = req.params;
+    const { completed_date, is_completed } = req.body;
+    const user_id = req.user.id;
+
+    try {
+        if (is_completed) {
+            // 완료 처리
+            const query = `
+                INSERT INTO routine_completions (user_id, routine_item_id, completed_date)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (routine_item_id, completed_date) DO NOTHING
+                RETURNING *;
+            `;
+            await db.query(query, [user_id, itemId, completed_date]);
+        } else {
+            // 완료 해제
+            await db.query(
+                'DELETE FROM routine_completions WHERE routine_item_id = $1 AND completed_date = $2 AND user_id = $3',
+                [itemId, completed_date, user_id]
+            );
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('루틴 완료 처리 중 에러:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 특정 날짜 루틴 아이템 완료 여부 조회
+router.get('/:routineId/items/completions', async (req, res) => {
+    const { routineId } = req.params;
+    const { completed_date } = req.query;
+    const user_id = req.user.id;
+
+    try {
+        const query = `
+            SELECT ri.id, ri.title,
+                CASE WHEN rc.id IS NOT NULL THEN true ELSE false END as is_completed
+            FROM routine_items ri
+            LEFT JOIN routine_completions rc 
+                ON ri.id = rc.routine_item_id 
+                AND rc.completed_date = $1
+                AND rc.user_id = $2
+            WHERE ri.routine_id = $3
+            ORDER BY ri.id ASC;
+        `;
+        const result = await db.query(query, [completed_date, user_id, routineId]);
+        res.json({ success: true, data: result.rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;

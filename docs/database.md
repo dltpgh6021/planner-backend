@@ -4,6 +4,8 @@ erDiagram
     USERS ||--o{ DIARIES : "기록 (1:N)"
     ROUTINES ||--o{ ROUTINE_ITEMS : "포함 (1:N)"
     ROUTINES ||--o{ ROUTINE_SCHEDULES : "반복 요일 (1:N)"
+    ROUTINE_ITEMS ||--o{ ROUTINE_COMPLETIONS : "완료 기록 (1:N)"
+    USERS ||--o{ ROUTINE_COMPLETIONS : "완료 기록 (1:N)"
 
     USERS {
         uuid id PK "내부 관리용 고유 키"
@@ -35,7 +37,6 @@ erDiagram
         uuid routine_id FK "ROUTINES 참조"
         string title
         int list_order
-        boolean completed "완료 여부"  -- 새로 추가됨
     }
     
     ROUTINE_SCHEDULES {
@@ -49,4 +50,12 @@ erDiagram
         text content
         date target_date
         timestamp created_at
+    }
+
+    ROUTINE_COMPLETIONS {
+    uuid id PK
+    uuid user_id FK "USERS 참조"
+    uuid routine_item_id FK "ROUTINE_ITEMS 참조"
+    date completed_date "완료한 날짜"
+    timestamp created_at
     }
