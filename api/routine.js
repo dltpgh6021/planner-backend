@@ -402,11 +402,23 @@ router.post('/from-image', async (req, res) => {
             let itemResults = [];
                 for (const item of generatedData.items) {
                     const itemQuery = `
-                        INSERT INTO routine_items (routine_id, content)
-                        VALUES ($1, $2)
+                        INSERT INTO routine_items (routine_id, title, list_order, start_time)
+                        VALUES ($1, $2, $3, $4)
                         RETURNING *;
                     `;
-                    const result = await client.query(itemQuery, [newRoutineId, item.content]);
+                    const result = await client.query(itemQuery, [
+                        newRoutineId, 
+                        item.content, 
+                        order++, 
+                        item.start_time
+                    ]);
+
+                    const saveItem = result.rows[0];
+
+                    if(savedItem.start_time) {
+                        saveItem.start_time = saveItem.start_time.substrint(0, 5);
+                    }
+
                     itemResults.push(result.rows[0]);
                 }
             createdRoutine.items = itemResults;
