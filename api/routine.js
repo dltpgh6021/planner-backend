@@ -232,13 +232,24 @@ router.post('/:routineId/items', async(req, res) => {
             return res.status(403).json({ success: false, message: "권한이 없거나 해당 루틴을 찾을 수 없습니다." });
         }
 
+        let targetTime = start_time;
+        if (!targetTime) {
+            const now = new Date();
+            targetTime = now.toTimeString().split(' ')[0].substring(0, 5);
+        }
+
         // user의 루틴임을 확인 이후 아이템 추가
         const query = `
-            INSERT INTO routine_items (routine_id, title)
-            VALUES ($1, $2)
-            RETURNING id, title;
+            INSERT INTO routine_items (routine_id, title, start_time)
+            VALUES ($1, $2, $3)
+            RETURNING id, title, start_time;
         `;
-        const result = await db.query(query, [routineId, item_name]);
+        const result = await db.query(query, [routineId, item_name, targetTime]);
+
+        const newItem = result.rows[0];
+        if (newItem.start_time) {
+            newItem.start_time = newItem.start_time.substring(0, 5);
+        }
 
         res.status(201).json({
             success: true, 
