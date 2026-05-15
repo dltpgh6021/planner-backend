@@ -2,69 +2,108 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
+// title·content·routineTags·listTags를 JSON으로 묶어 content 컬럼 하나에 저장
+function pack(title, content, routineTags, listTags) {
+    return JSON.stringify({
+        title:       title       || '',
+        content:     content     || '',
+        routineTags: Array.isArray(routineTags) ? routineTags : [],
+        listTags:    Array.isArray(listTags)    ? listTags    : [],
+    });
+}
+
+function unpack(row) {
+    try {
+        const p = JSON.parse(row.content);
+        const routineTags = Array.isArray(p.routineTags) ? p.routineTags : [];
+        // 구형 'tags' 필드 호환: 기존 데이터는 listTags로 취급
+        const listTags    = Array.isArray(p.listTags) ? p.listTags
+                          : Array.isArray(p.tags)     ? p.tags : [];
+        return {
+            id:          String(row.id),
+            target_date: row.target_date || '',
+            title:       p.title   || '',
+            content:     p.content || '',
+            routineTags,
+            listTags,
+        };
+    } catch (_) {
+        return {
+            id:          String(row.id),
+            target_date: row.target_date || '',
+            title:       '',
+            content:     row.content || '',
+            routineTags: [],
+            listTags:    [],
+        };
+    }
+}
+
+// DATE를 timezone 영향 없이 "YYYY-MM-DD" 문자열로 가져오는 SELECT 절
+const SELECT = `id, user_id, content, TO_CHAR(target_date, 'YYYY-MM-DD') AS target_date`;
+
 // 일기 작성
 router.post('/', async (req, res) => {
-    const { content, target_date } = req.body;
+    const { title, content, target_date, routineTags, listTags } = req.body;
     const user_id = req.user.id;
     try {
-        const query = `
-            INSERT INTO DIARIES (user_id, content, target_date)
-            VALUES ($1, $2, $3)
-            RETURNING *;
-        `;
-        const values = [user_id, content, target_date];
-        const result = await db.query(query, values);
-        
-        res.status(201).json({ success: true, data: result.rows[0] });
+        const result = await db.query(
+            `INSERT INTO DIARIES (user_id, content, target_date)
+             VALUES ($1, $2, $3)
+             RETURNING ${SELECT}`,
+            [user_id, pack(title, content, routineTags, listTags), target_date]
+        );
+        res.status(201).json({ success: true, data: unpack(result.rows[0]) });
+    } catch (err) {
+        console.error('일기 작성 오류:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 전체 일기 목록 조회
+router.get('/all', async (req, res) => {
+    const user_id = req.user.id;
+    try {
+        const result = await db.query(
+            `SELECT ${SELECT} FROM DIARIES WHERE user_id = $1 ORDER BY target_date DESC`,
+            [user_id]
+        );
+        res.json({ success: true, data: result.rows.map(unpack) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// 일기 조회
-// 특정 날짜의 일기 조회
+// 키워드 검색 (제목·내용·태그 모두)
+router.get('/search', async (req, res) => {
+    const { keyword } = req.query;
+    const user_id = req.user.id;
+    if (!keyword) return res.status(400).json({ success: false, message: 'keyword가 필요합니다.' });
+    try {
+        const result = await db.query(
+            `SELECT ${SELECT} FROM DIARIES
+             WHERE user_id = $1 AND content ILIKE $2
+             ORDER BY target_date DESC`,
+            [user_id, `%${keyword}%`]
+        );
+        res.json({ success: true, data: result.rows.map(unpack) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 특정 날짜 일기 조회
 router.get('/', async (req, res) => {
     const { target_date } = req.query;
     const user_id = req.user.id;
-    if (!user_id || !target_date) {
-        return res.status(400).json({ success: false, message: "user_id와 target_date가 필요합니다." });
-    }
+    if (!target_date) return res.status(400).json({ success: false, message: 'target_date가 필요합니다.' });
     try {
-        const query = 'SELECT * FROM DIARIES WHERE user_id = $1 AND target_date = $2;';
-        const result = await db.query(query, [user_id, target_date]);
-        res.json({ success: true, data: result.rows.length > 0 ? result.rows[0] : null });
+        const result = await db.query(
+            `SELECT ${SELECT} FROM DIARIES WHERE user_id = $1 AND target_date = $2`,
+            [user_id, target_date]
+        );
+        res.json({ success: true, data: result.rows.length > 0 ? unpack(result.rows[0]) : null });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// 일기 내용으로 조회
-router.get('/search', async (req, res) => {
-    // 검색어(keyword)도 query에서 받아옵니다.
-    const { keyword } = req.query;
-    const user_id = req.user.id;
-
-    if (!user_id || !keyword) {
-        return res.status(400).json({ success: false, message: "user_id와 keyword가 필요합니다." });
-    }
-
-    try {
-        // PostgreSQL 꿀팁: ILIKE를 쓰면 영어 대소문자를 구분하지 않고 찾아줘!
-        // ORDER BY target_date DESC: 가장 최근 일기부터 먼저 보여주기
-        const query = `
-            SELECT * FROM DIARIES 
-            WHERE user_id = $1 AND content ILIKE $2
-            ORDER BY target_date DESC;
-        `;
-        
-        // 검색어 앞뒤로 '%'를 붙여서, 해당 단어가 중간에 포함된 모든 일기를 찾음
-        const values = [user_id, `%${keyword}%`]; 
-        const result = await db.query(query, values);
-
-        // 검색 결과가 없으면 정상적으로 빈 배열([])을 프론트엔드로 반환!
-        res.json({ success: true, data: result.rows });
-    } catch (err) {
-        console.error('일기 검색 중 에러:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -72,22 +111,20 @@ router.get('/search', async (req, res) => {
 // 일기 수정
 router.patch('/:id', async (req, res) => {
     const { id } = req.params;
-    const { content } = req.body;
+    const { title, content, routineTags, listTags } = req.body;
     const user_id = req.user.id;
     try {
-        const query = `
-            UPDATE DIARIES 
-            SET content = $1
-            WHERE id = $2 AND user_id = $3
-            RETURNING *;
-        `;
-        const result = await db.query(query, [content, id, user_id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, message: "일기를 찾을 수 없거나 권한이 없습니다." });
-        }
-        res.json({ success: true, data: result.rows[0] });
+        const result = await db.query(
+            `UPDATE DIARIES SET content = $1
+             WHERE id = $2 AND user_id = $3
+             RETURNING ${SELECT}`,
+            [pack(title, content, routineTags, listTags), id, user_id]
+        );
+        if (result.rowCount === 0)
+            return res.status(404).json({ success: false, message: '일기를 찾을 수 없습니다.' });
+        res.json({ success: true, data: unpack(result.rows[0]) });
     } catch (err) {
+        console.error('일기 수정 오류:', err.message);
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -97,10 +134,13 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     const user_id = req.user.id;
     try {
-        const query = 'DELETE FROM DIARIES WHERE id = $1 AND user_id = $2 RETURNING *;';
-        const result = await db.query(query, [id, user_id]);
-        if (result.rowCount === 0) return res.status(404).json({ success: false, message: "항목을 찾을 수 없거나 권한이 없습니다." });
-        res.json({ success: true, message: "성공적으로 삭제되었습니다." });
+        const result = await db.query(
+            `DELETE FROM DIARIES WHERE id = $1 AND user_id = $2 RETURNING *`,
+            [id, user_id]
+        );
+        if (result.rowCount === 0)
+            return res.status(404).json({ success: false, message: '일기를 찾을 수 없습니다.' });
+        res.json({ success: true, message: '삭제되었습니다.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
