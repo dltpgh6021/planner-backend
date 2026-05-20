@@ -457,7 +457,7 @@ router.post('/from-image', async (req, res) => {
             let itemResults = [];
                 for (const item of generatedData.items) {
                     const itemQuery = `
-                        INSERT INTO routine_items (routine_id, content)
+                        INSERT INTO routine_items (routine_id, title)
                         VALUES ($1, $2)
                         RETURNING *;
                     `;
