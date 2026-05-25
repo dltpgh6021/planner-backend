@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { getRoutinePrompt } = require('../prompts/routinePrompt');
+const { getRoutinePrompt, getTextRoutinePrompt, getDefaultRoutinePrompt } = require('../prompts/routinePrompt');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -416,68 +416,38 @@ router.post('/from-image', async (req, res) => {
     const { imageBase64, mimeType } = req.body;
     const user_id = req.user.id;
 
-    if (!imageBase64 || !mimeType) {
-        return res.status(400).json({ success: false, message: "이미지 데이터가 필요합니다." });
-    }
-
     try {
-        const model = genAI.getGenerativeModel({ 
+        const model = genAI.getGenerativeModel({
             model: "gemini-2.5-flash",
-            generationConfig: { responseMimeType: "application/json" } 
+            generationConfig: { responseMimeType: "application/json" }
         });
 
-        // 💡 루틴에 맞게 수정된 프롬프트
-        const prompt = getRoutinePrompt();
+        const { userMessage } = req.body;
+        const hasImage = imageBase64 && mimeType;
+        const hasText  = userMessage && userMessage.trim().length > 0;
 
-        const imagePart = {
-            inlineData: { data: imageBase64, mimeType: mimeType }
-        };
-
-        const result = await model.generateContent([prompt, imagePart]);
+        let result;
+        if (hasImage) {
+            // 이미지 있음 (+ 선택적 텍스트)
+            const imagePart = { inlineData: { data: imageBase64, mimeType } };
+            result = await model.generateContent([getRoutinePrompt(userMessage), imagePart]);
+        } else if (hasText) {
+            // 텍스트만
+            result = await model.generateContent(getTextRoutinePrompt(userMessage));
+        } else {
+            // 아무것도 없음 → 기본 루틴
+            result = await model.generateContent(getDefaultRoutinePrompt());
+        }
         const generatedData = JSON.parse(result.response.text());
 
-        // 트랜잭션 시작: ROUTINES 생성 -> routine_items 생성
-        const client = await db.connect();
-        let createdRoutine;
-
-        try {
-            await client.query('BEGIN');
-
-            // 1. 부모 테이블(ROUTINES)에 루틴 제목 먼저 INSERT
-            const routineQuery = `
-                INSERT INTO ROUTINES (user_id, routine_name)
-                VALUES ($1, $2)
-                RETURNING *;
-            `;
-            const routineResult = await client.query(routineQuery, [user_id, generatedData.routine_title]);
-            createdRoutine = routineResult.rows[0];
-            const newRoutineId = createdRoutine.id;
-
-            // 2. 자식 테이블(routine_items)에 AI가 만든 쪼개진 행동들 INSERT
-            let itemResults = [];
-                for (const item of generatedData.items) {
-                    const itemQuery = `
-                        INSERT INTO routine_items (routine_id, title)
-                        VALUES ($1, $2)
-                        RETURNING *;
-                    `;
-                    const result = await client.query(itemQuery, [newRoutineId, item.content]);
-                    itemResults.push(result.rows[0]);
-                }
-            createdRoutine.items = itemResults;
-
-            await client.query('COMMIT');
-        } catch (dbErr) {
-            await client.query('ROLLBACK');
-            throw dbErr;
-        } finally {
-            client.release();
-        }
-
+        // DB 저장 없이 AI 결과만 반환 (클라이언트에서 확인 후 등록)
         res.json({
             success: true,
-            message: "상황 맞춤형 루틴이 성공적으로 생성되었습니다.",
-            data: createdRoutine
+            data: {
+                routine_title: generatedData.routine_title,
+                schedules: generatedData.schedules || [0,1,2,3,4,5,6],
+                items: generatedData.items   // [{ content: "HH:MM 행동설명" }]
+            }
         });
 
     } catch (err) {

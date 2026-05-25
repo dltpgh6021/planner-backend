@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { getTodoPrompt, getTextTodoPrompt, getDefaultTodoPrompt } = require('../prompts/todoPrompt');
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // TODO 추가
 router.post('/', async (req, res) => {
@@ -139,6 +143,40 @@ router.get('/monthly', async (req, res) => {
         res.json({ success: true, data: result.rows });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// AI 할 일 목록 생성 (미리보기 전용, DB 저장 없음)
+router.post('/from-ai', async (req, res) => {
+    try {
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+            generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const { imageBase64, mimeType, userMessage } = req.body;
+        const hasImage = imageBase64 && mimeType;
+        const hasText  = userMessage && userMessage.trim().length > 0;
+
+        let result;
+        if (hasImage) {
+            const imagePart = { inlineData: { data: imageBase64, mimeType } };
+            result = await model.generateContent([getTodoPrompt(userMessage), imagePart]);
+        } else if (hasText) {
+            result = await model.generateContent(getTextTodoPrompt(userMessage));
+        } else {
+            result = await model.generateContent(getDefaultTodoPrompt());
+        }
+
+        const generatedData = JSON.parse(result.response.text());
+
+        res.json({
+            success: true,
+            data: { items: generatedData.items }
+        });
+    } catch (err) {
+        console.error('AI 리스트 생성 에러:', err);
+        res.status(500).json({ success: false, message: "AI 분석에 실패했습니다.", error: err.message });
     }
 });
 
